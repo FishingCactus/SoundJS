@@ -125,10 +125,10 @@ this.createjs = this.createjs || {};
 	 * Audio sprites work around this limitation.
 	 * @property MAX_INSTANCES
 	 * @type {Number}
-	 * @default 30
+	 * @default 41
 	 * @static
 	 */
-	s.MAX_INSTANCES = 30;
+	s.MAX_INSTANCES = 41;
 
 	/**
 	 * Event constant for the "canPlayThrough" event for cleaner code.

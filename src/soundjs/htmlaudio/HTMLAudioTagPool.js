@@ -77,6 +77,15 @@ this.createjs = this.createjs || {};
 	 */
 	s._tagUsed = {};
 
+	/**
+	 * A count of howmany audio tags have been created so far.
+	 * @property _AudioTagCount
+	 * @type {{}}
+	 * @private
+	 * @static
+	 */
+	 s._audioTagCount = 0;
+
 // Static Methods
 	/**
 	  * Get an audio tag with the given source.
@@ -85,21 +94,38 @@ this.createjs = this.createjs || {};
 	  * @static
 	  */
 	 s.get = function (src) {
-		var t = s._tags[src];
-		if (t == null) {
-			// create new base tag
-			t = s._tags[src] = s._tagPool.get();
-			t.src = src;
-		} else {
-			// get base or pool
-			if (s._tagUsed[src]) {
-				t = s._tagPool.get();
-				t.src = src;
-			} else {
-				s._tagUsed[src] = true;
+		var tags = s._tags[src];
+		var t = null;
+		var length = tags ? tags.length : 0;
+		for(var i = 0; i < length; ++i) {
+			t = tags[i];
+			// unused audio tag available
+			if (t != null && !s._tagUsed[src][i]) {
+				s._tagUsed[src][i] = true;
+				return t;
 			}
 		}
-		return t;
+		if (length == 0) {
+			// create new base tag
+			t = s._tagPool.get();
+			s._audioTagCount++;
+			s._tags[src] = [t];
+			t.src = src;
+			s._tagUsed[src] = [false];
+			return t;
+		} else {
+			// no free tags available. preload
+			console.log("[Sound.JS] Creating new audio tag for source " + src + " !This causes a delay!");
+			t = s._tagPool.get();
+			s._audioTagCount++;
+			s._tags[src].push(t);
+			s._tagUsed[src].push(true);
+			t.src = src;
+			if (createjs.BrowserDetect.isInternetExplorer) {
+				t.addEventListener("error", s._handleMaximumInstances);
+			}
+			return t;
+		}
 	 };
 
 	 /**
@@ -111,26 +137,39 @@ this.createjs = this.createjs || {};
 	  */
 	 s.set = function (src, tag) {
 		 // check if this is base, if yes set boolean if not return to pool
-		 if(tag == s._tags[src]) {
-			 s._tagUsed[src] = false;
-		 } else {
+		 var length = s._tags[src].length;
+		 var found = false;
+		 tag.removeEventListener("error", s._handleMaximumInstances);
+		 for( var i = 0; i < length; ++i ) {
+			 if (tag == s._tags[src][i]) {
+				 s._tagUsed[src][i] = false;
+				 found = true;
+			 }
+		 }
+		 if (!found) {
+			 s._audioTagCount--;
 			 s._tagPool.set(tag);
 		 }
 	 };
 
 	/**
-	 * Delete stored tag reference and return them to pool. Note that if the tag reference does not exist, this will fail.
+	 * Delete stored tag references and return them to pool. Note that if the tag reference does not exist, this will fail.
 	 * @method remove
 	 * @param {String} src The source for the tag
 	 * @return {Boolean} If the TagPool was deleted.
 	 * @static
 	 */
 	s.remove = function (src) {
-		var tag = s._tags[src];
-		if (tag == null) {return false;}
-		s._tagPool.set(tag);
-		delete(s._tags[src]);
-		delete(s._tagUsed[src]);
+		var tags = s._tags[src];
+		if (tags == null) {return false;}
+		var length = tags.length;
+		for (var i = 0; i < length; ++i) {
+			var tag = s._tags[src][i];
+			s._tagPool.set(tag);
+			delete(s._tags[src][i]);
+			delete(s._tagUsed[src][i]);
+		}
+
 		return true;
 	};
 
@@ -142,10 +181,52 @@ this.createjs = this.createjs || {};
 	 * @static
 	 */
 	s.getDuration= function (src) {
-		var t = s._tags[src];
+		var t = s._tags[src][0];
 		if (t == null || !t.duration) {return 0;}	// OJR duration is NaN if loading has not completed
 		return t.duration * 1000;
 	};
+
+
+	/**
+	* Code to handle what to do if maximumInstances is reached in IE
+	* #method _handleMaximumInstances
+	* @param {Event} Event object.
+	* @private
+	*/
+
+	s._handleMaximumInstances = function(e) {
+		if ( e.target.error.code == 4 ) {
+			// find some tags to free.
+			var tags = s._tags;
+			var remove_count = 0;
+			for (var src_name in tags) {
+				var current_tags = tags[src_name];
+				if (current_tags.length > 1) {
+					for( var i = current_tags.length - 1; i > 0; --i) {
+						if (remove_count >= 4) {
+							// that's enough free space.
+							e.currentTarget.removeEventListener(s._handleMaximumInstances);
+							e.currentTarget.load();
+							return;
+						}
+						if (!s._tagUsed[src_name][i]) {
+							remove_count++;
+							s.set(src_name, current_tags[i]);
+							current_tags.splice(i, 1);
+							s._tagUsed[src_name].splice(i, 1);
+						}
+					}
+				}
+			}
+			if (remove_count == 0) {
+				// we are complete full! fail to play...
+				console.log("IE audio tags at maximum capacity. Failed to create sound " + e.currentTarget.src + ". Please use audiosprites");
+			} else {
+				e.currentTarget.removeEventListener(s._handleMaximumInstances);
+				e.currentTarget.load();
+			}
+		}
+	}
 
 	createjs.HTMLAudioTagPool = HTMLAudioTagPool;
 

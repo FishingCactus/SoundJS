@@ -68,6 +68,7 @@ this.createjs = this.createjs||{};
 	var agent = BrowserDetect.agent = window.navigator.userAgent;
 	BrowserDetect.isWindowPhone = (agent.indexOf("IEMobile") > -1) || (agent.indexOf("Windows Phone") > -1);
 	BrowserDetect.isFirefox = (agent.indexOf("Firefox") > -1);
+	BrowserDetect.isInternetExplorer = (agent.indexOf("Trident") > -1) && !BrowserDetect.isWindowsPhone;
 	BrowserDetect.isOpera = (window.opera != null);
 	BrowserDetect.isChrome = (agent.indexOf("Chrome") > -1);  // NOTE that Chrome on Android returns true but is a completely different browser with different abilities
 	BrowserDetect.isIOS = (agent.indexOf("iPod") > -1 || agent.indexOf("iPhone") > -1 || agent.indexOf("iPad") > -1) && !BrowserDetect.isWindowPhone;
